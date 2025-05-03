@@ -1,0 +1,195 @@
+<!--
+  =============================
+  PHẦN HƯỚNG DẪN CODE (DÀNH CHO NGƯỜI MỚI BẮT ĐẦU)
+  =============================
+  File này là giao diện chính của ứng dụng Quản Lý Tài Chính Cá Nhân.
+  - Sử dụng HTML để xây dựng bố cục trang.
+  - Các class như 'container', 'card', 'btn-primary'... dùng để style (xem file style.css).
+  - Dữ liệu động (giao dịch, biểu đồ, tổng kết) sẽ được cập nhật qua script.js và chart.js.
+  - Các chức năng chính: Thêm giao dịch, sửa/xóa giao dịch, lọc, xem biểu đồ chi tiêu.
+  
+  HƯỚNG DẪN MỞ RỘNG:
+  - Để thêm trường dữ liệu mới (ví dụ: "Địa điểm"), hãy thêm <input> tương ứng vào form và cập nhật script.js, Code.gs.
+  - Để thêm filter nâng cao (ví dụ: lọc theo số tiền), thêm <input> hoặc <select> trong phần .filter-group và cập nhật hàm lọc ở script.js.
+  - Để xuất dữ liệu ra file Excel, có thể dùng thư viện SheetJS hoặc Google Apps Script nâng cao.
+  - Để đổi giao diện sang dark mode, thêm class và cập nhật style.css.
+  
+  Xem thêm comment ở từng phần bên dưới để hiểu rõ từng khối giao diện.
+-->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản Lý Tài Chính Cá Nhân</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <!--
+    =============================
+    KHỐI CHỨA TOÀN BỘ GIAO DIỆN
+    =============================
+    - Sử dụng class 'container' để style toàn bộ giao diện.
+    - Chứa các khối giao diện chính: form thêm giao dịch, bảng giao dịch, modal sửa giao dịch.
+  -->
+  <div class="container">
+    <h1>Quản Lý Tài Chính</h1>
+    <div class="main-content">
+      <!--
+        =============================
+        CỘT TRÁI: FORM THÊM GIAO DỊCH
+        =============================
+        - Form này để nhập giao dịch mới (thu nhập/chi tiêu).
+        - Khi submit sẽ gọi API và cập nhật bảng bên dưới.
+        - Các trường: Ngày, Loại, Hạng mục, Số tiền, Ghi chú.
+        - Hạng mục sẽ thay đổi tùy theo loại giao dịch (script.js xử lý).
+        - Có thể mở rộng bằng cách thêm trường hoặc validate nâng cao.
+      -->
+      <div class="left-column">
+        <form id="transaction-form" class="card">
+          <h2>Thêm Giao Dịch Mới</h2>
+          <div class="form-group">
+            <label for="date">Ngày:</label>
+            <input type="date" id="date">
+          </div>
+          <div class="form-group">
+            <label for="type">Loại giao dịch:</label>
+            <select id="type" required>
+              <option value="">Chọn loại giao dịch</option>
+              <option value="Thu nhập">Thu nhập</option>
+              <option value="Chi tiêu">Chi tiêu</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="category">Hạng mục:</label>
+            <select id="category" required>
+              <option value="">Chọn hạng mục</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="amount">Số tiền:</label>
+            <input type="number" id="amount" placeholder="Nhập số tiền" required>
+          </div>
+          <div class="form-group">
+            <label for="note">Ghi chú:</label>
+            <input type="text" id="note" placeholder="Ghi chú (không bắt buộc)">
+          </div>
+          <div id="form-messages"></div>
+          <button type="submit" class="btn-primary">Thêm giao dịch</button>
+        </form>
+      </div>
+      <!--
+        =============================
+        CỘT PHẢI: TỔNG KẾT VÀ BIỂU ĐỒ
+        =============================
+        - Hiển thị tổng số dư hiện tại (tính toán từ danh sách giao dịch).
+        - Biểu đồ chi tiêu theo hạng mục (dùng Chart.js, xem chart.js).
+        - Có thể mở rộng: Thêm biểu đồ cột, biểu đồ đường, hoặc thống kê nâng cao.
+      -->
+      <div class="right-column">
+        <div class="summary card">
+          <h2>Tổng số dư</h2>
+          <div class="balance-amount">
+            <span id="balance">0</span> VND
+          </div>
+        </div>
+        <div class="chart card">
+          <h2>Biểu Đồ Chi Tiêu</h2>
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <!--
+      =============================
+      BẢNG GIAO DỊCH
+      =============================
+      - Hiển thị tất cả giao dịch đã nhập.
+      - Có nút lọc theo tháng/năm, reset filter.
+      - Có thể mở rộng: Thêm tìm kiếm theo ghi chú, lọc theo số tiền, xuất CSV...
+      - Các nút "Sửa" và "Xóa" sẽ gọi script.js để thao tác tương ứng.
+    -->
+    <div class="transactions card">
+      <div class="card-header">
+        <h2>Danh sách giao dịch đã nhập</h2>
+        <div class="filter-group">
+          <select id="filter-month"></select>
+          <select id="filter-year"></select>
+          <button id="filter-apply" type="button" class="btn-secondary">Lọc</button>
+          <button id="filter-reset" type="button" class="btn-secondary">Reset</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table id="transactions-table">
+          <thead>
+            <tr>
+              <th>Ngày</th>
+              <th>Loại</th>
+              <th>Hạng mục</th>
+              <th>Số tiền</th>
+              <th>Ghi chú</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <!--
+      =============================
+      MODAL SỬA GIAO DỊCH
+      =============================
+      - Hiển thị khi bấm "Sửa" ở bảng giao dịch.
+      - Cho phép chỉnh lại các trường giao dịch và lưu lại.
+      - Có thể mở rộng: Thêm nút "Hủy", xác nhận trước khi lưu, validate nâng cao.
+    -->
+    <div id="edit-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <span id="close-edit-modal" class="close">&times;</span>
+        <h2>Sửa Giao Dịch</h2>
+        <form id="edit-transaction-form">
+          <input type="hidden" id="edit-id">
+          <div class="form-group">
+            <label for="edit-date">Ngày:</label>
+            <input type="date" id="edit-date">
+          </div>
+          <div class="form-group">
+            <label for="edit-type">Loại giao dịch:</label>
+            <select id="edit-type" required>
+              <option value="">Chọn loại giao dịch</option>
+              <option value="Thu nhập">Thu nhập</option>
+              <option value="Chi tiêu">Chi tiêu</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edit-category">Hạng mục:</label>
+            <select id="edit-category" required>
+              <option value="">Chọn hạng mục</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edit-amount">Số tiền:</label>
+            <input type="number" id="edit-amount" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-note">Ghi chú:</label>
+            <input type="text" id="edit-note">
+          </div>
+          <div id="edit-form-messages"></div>
+          <button type="submit" class="btn-primary">Lưu thay đổi</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <!--
+    =============================
+    CÁC SCRIPT ĐƯỢC IMPORT
+    =============================
+    - chart.js: Xử lý biểu đồ chi tiêu (Chart.js + custom).
+    - script.js: Xử lý logic giao diện, gọi API, cập nhật bảng, modal...
+    - Có thể mở rộng: Thêm file script mới cho tính năng nâng cao (ví dụ: xuất file, dark mode...)
+  -->
+  <script src="chart.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
